@@ -1,10 +1,11 @@
 import webbrowser
 import pyperclip
-import keyboard
 import time
 
-def btn1_up():
-    keyboard.press_and_release('ctrl+c')
+
+def btn1_up(proc_):
+    proc_.stdin.write("ctrlc\n")
+    proc_.stdin.flush()
     time.sleep(0.1)
 
     # Отримуємо текст з буфера обміну

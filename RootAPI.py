@@ -3,7 +3,10 @@ import threading
 import serial
 from serial.tools import list_ports
 import time
-import logging
+import sys
+import select
+
+from helpers import keyboard_helpers
 
 
 def find_ch340_port():
@@ -29,9 +32,9 @@ class HardwareAPI:
         self.first_up_time = 0
         self.first_up_button = None
 
-        self.on_btn1_up = lambda: logging.info("No function set to btn1_up")
-        self.on_btn2_up = lambda: logging.info("No function set to btn2_up")
-        self.on_both_up = lambda: logging.info("No function set to both_up")
+        self.on_btn1_up = lambda: print("btn1_up", flush=True)
+        self.on_btn2_up = lambda: print("btn2_up", flush=True)
+        self.on_both_up = lambda: print("both_up", flush=True)
 
 
     def data_reset(self):
@@ -102,4 +105,17 @@ class HardwareAPI:
                 self.btn1_last = btn1
                 self.btn2_last = btn2
 
+                # Break condition
+                if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+                    strip = sys.stdin.readline().strip()
+                    if strip == "exit":
+                        self.running = False
+                    if strip == "ctrlc":
+                        keyboard_helpers.press_and_release('ctrl+c')
+
             time.sleep(0.01)
+
+
+if __name__ == "__main__":
+    ha = HardwareAPI(find_ch340_port())
+    ha.listen()
