@@ -15,7 +15,8 @@ def stop():
 
 
 if __name__ == '__main__':
-    ha = HardwareAPI.HardwareAPI("COM3")
+    port = HardwareAPI.find_ch340_port()
+    ha = HardwareAPI.HardwareAPI(port)
     ha.on_btn1_up = lambda: btn1_up()
     ha.on_btn2_up = lambda: btn2_up()
     ha.on_both_up = lambda: both_up()

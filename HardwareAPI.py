@@ -1,8 +1,17 @@
 import threading
 
 import serial
+from serial.tools import list_ports
 import time
 import logging
+
+
+def find_ch340_port():
+    ports = list_ports.comports()
+    for port in ports:
+        if "1A86:7523" in port.hwid.upper():  # CH340 USB ID
+            return port.device  # e.g., "COM3" on Windows or "/dev/ttyUSB0" on Linux
+    return None
 
 
 class HardwareAPI:
