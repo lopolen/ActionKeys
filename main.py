@@ -1,48 +1,50 @@
+import socket
 import sys
-import subprocess
-import time
-
-import RootAPI, FrontEnd
 import threading
+
+import FrontEnd
+import config
+from logger import logger
 
 from button_scripts.both_up import both_up
 from button_scripts.btn1_up import btn1_up
 from button_scripts.btn2_up import btn2_up
 
 
-def start_hardware_api() -> subprocess.Popen:
-    return subprocess.Popen(
-        ['sudo', '/home/nikita/PycharmProjects/ActionKeys/.venv/bin/python', 'RootAPI.py'],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        text=True
-    )
+def hardware_listen():
+    global running
+
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.connect(config.HAPI_ADDR)
+
+    logger.info("Connected to Hardware server")
+    while running:
+        data = client.recv(1024)
+        if data:
+            command = data.decode(config.ENCODE).strip()
+            logger.debug(f'Received Hardware server command: {command}')
+            if command == "btn1_up":
+                btn1_up()
+
+    client.close()
 
 
-def listen_to_hardware(proc_: subprocess.Popen):
-    while True:
-        line = proc_.stdout.readline()
-        if not line:
-            break
-        line = line.strip()
-        if line == "btn1_up":
-            btn1_up(proc_)
-
-        time.sleep(0.01)
+def send_to_root(command: str):
+    with socket.create_connection(config.RAIP_ADDR) as sock:
+        sock.sendall(command.encode(config.ENCODE))
 
 
 def stop():
-    global proc
+    global running
 
-    proc.stdin.write("exit\n")
-    proc.stdin.flush()
-    proc.terminate()
-
+    logger.info("Stop function start")
+    send_to_root('exit')
+    running = False
     sys.exit()
 
 
 if __name__ == '__main__':
-    proc = start_hardware_api()
-    threading.Thread(target=lambda: listen_to_hardware(proc)).start()
+    running = True
 
+    threading.Thread(target=hardware_listen).start()
     FrontEnd.run(lambda: stop())

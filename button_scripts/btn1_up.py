@@ -3,9 +3,9 @@ import pyperclip
 import time
 
 
-def btn1_up(proc_):
-    proc_.stdin.write("ctrlc\n")
-    proc_.stdin.flush()
+def btn1_up():
+    # TODO ctrl+c
+
     time.sleep(0.1)
 
     # Отримуємо текст з буфера обміну
