@@ -1,10 +1,11 @@
 import webbrowser
 import pyperclip
-import keyboard
 import time
 
+
 def btn1_up():
-    keyboard.press_and_release('ctrl+c')
+    # TODO ctrl+c
+
     time.sleep(0.1)
 
     # Отримуємо текст з буфера обміну

@@ -1,26 +1,50 @@
+import socket
 import sys
-
-import HardwareAPI, FrontEnd
 import threading
+
+import FrontEnd
+import config
+from logger import logger
 
 from button_scripts.both_up import both_up
 from button_scripts.btn1_up import btn1_up
 from button_scripts.btn2_up import btn2_up
 
 
+def hardware_listen():
+    global running
+
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.connect(config.HAPI_ADDR)
+
+    logger.info("Connected to Hardware server")
+    while running:
+        data = client.recv(1024)
+        if data:
+            command = data.decode(config.ENCODE).strip()
+            logger.debug(f'Received Hardware server command: {command}')
+            if command == "btn1_up":
+                btn1_up()
+
+    client.close()
+
+
+def send_to_root(command: str):
+    with socket.create_connection(config.RAIP_ADDR) as sock:
+        sock.sendall(command.encode(config.ENCODE))
+
+
 def stop():
-    global ha
-    ha.running = False
+    global running
+
+    logger.info("Stop function start")
+    send_to_root('exit')
+    running = False
     sys.exit()
 
 
 if __name__ == '__main__':
-    port = HardwareAPI.find_ch340_port()
-    ha = HardwareAPI.HardwareAPI(port)
-    ha.on_btn1_up = lambda: btn1_up()
-    ha.on_btn2_up = lambda: btn2_up()
-    ha.on_both_up = lambda: both_up()
+    running = True
 
-    threading.Thread(target=ha.listen).start()
-    on_stop = lambda: stop()
-    FrontEnd.run(on_stop)
+    threading.Thread(target=hardware_listen).start()
+    FrontEnd.run(lambda: stop())
