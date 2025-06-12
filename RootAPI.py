@@ -1,6 +1,11 @@
+import json
 import socket
+import subprocess
 import sys
 import threading
+from json import JSONDecodeError
+
+import keyboard
 
 import config
 from HardwareAPI import HardwareAPI
@@ -43,6 +48,20 @@ class RootServer:
                     logger.debug("Exit command sent")
                     api_exit()
 
+                try:
+                    command = json.loads(command)
+                    if command['command'] == "imitate_keyboard":
+                        logger.info(f"Imitating {command['args']} press and release")
+                        keyboard.press_and_release(command['args'])
+
+                    if command['command'] == "cmd":
+                        logger.info(f"cmd: {command['args']}")
+                        subprocess.Popen(command['args'])
+
+                except JSONDecodeError:
+                    logger.warning(f"Invalid command sent: {command}")
+                    continue
+
         conn.close()
 
 
@@ -55,6 +74,11 @@ def api_exit():
     rs.running = False
 
     sys.exit()
+
+
+def root(command: dict):
+    with socket.create_connection(config.RAIP_ADDR) as sock:
+        sock.send(json.dumps(command).encode(config.ENCODE))
 
 
 if __name__ == "__main__":

@@ -24,7 +24,11 @@ def hardware_listen():
             command = data.decode(config.ENCODE).strip()
             logger.debug(f'Received Hardware server command: {command}')
             if command == "btn1_up":
-                btn1_up()
+                threading.Thread(target=btn1_up).start()
+            elif command == "btn2_up":
+                threading.Thread(target=btn2_up).start()
+            elif command == "both_up":
+                threading.Thread(target=both_up).start()
 
     client.close()
 
