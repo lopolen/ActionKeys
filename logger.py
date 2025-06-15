@@ -13,8 +13,11 @@ if not os.path.exists(LOG_FILE):
         os.utime(LOG_FILE, None)
     os.chmod(LOG_FILE, 0o666)
 
-logger = logging.getLogger("ActionKeys")
-logger.setLevel(logging.DEBUG)
+rootlog = logging.getLogger("RootLog")
+rootlog.setLevel(logging.DEBUG)
+
+guilog = logging.getLogger("GUILog")
+guilog.setLevel(logging.DEBUG)
 
 file_handler = logging.handlers.RotatingFileHandler(
     LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3
@@ -25,8 +28,10 @@ formatter = logging.Formatter(
     '%(asctime)s | %(name)s | %(levelname)s | %(threadName)s | %(message)s'
 )
 file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
+rootlog.addHandler(file_handler)
+guilog.addHandler(file_handler)
 
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
-logger.addHandler(console_handler)
+rootlog.addHandler(console_handler)
+guilog.addHandler(console_handler)

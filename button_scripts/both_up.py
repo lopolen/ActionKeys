@@ -1,2 +1,4 @@
+from FrontEnd import controller
+
 def both_up():
-    pass
+    controller.show_window_signal.emit()

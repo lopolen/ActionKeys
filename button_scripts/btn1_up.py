@@ -7,7 +7,7 @@ from RootAPI import root
 def btn1_up():
     root({"command": "imitate_keyboard", "args": "ctrl+c"})
 
-    time.sleep(0.2)
+    time.sleep(0.5)
 
     text = pyperclip.paste()
     if not text:

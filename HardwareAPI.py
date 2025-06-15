@@ -6,61 +6,61 @@ import serial
 from serial.tools import list_ports
 
 import config
-from logger import logger
-
-
-class APIServer:
-    def __init__(self):
-        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server.bind(config.HAPI_ADDR)
-        self.server.settimeout(1.0)
-        self.conns = []
-
-        self.running = True
-
-
-    def server_listen(self):
-        self.server.listen()
-
-        logger.info("Hardware server listen start")
-        while self.running:
-            try:
-                conn, addr = self.server.accept()
-                self.conns.append(conn)
-            except socket.timeout:
-                continue
-            except OSError:
-                break
-
-
-    def send_all(self, msg: str):
-        dead_conns = []
-        for conn in self.conns:
-            try:
-                conn.send(msg.encode(config.ENCODE))
-            except (BrokenPipeError, ConnectionResetError, OSError):
-                dead_conns.append(conn)
-
-        self.delete_dead_conns(dead_conns)
-
-
-    def delete_dead_conns(self, dead_conns: list[socket.socket]):
-        for conn in dead_conns:
-            self.conns.remove(conn)
-            try:
-                conn.close()
-            except OSError:
-                pass
+from logger import rootlog
 
 
 class HardwareAPI:
     BOTH_RELEASE_TIMEOUT = 0.05  # 50 мс
 
+
+    class APIServer:
+        def __init__(self):
+            self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.server.bind(config.HAPI_ADDR)
+            self.server.settimeout(1.0)
+            self.conns = []
+
+            self.running = True
+
+        def server_listen(self):
+            self.server.listen()
+
+            rootlog.info("Hardware server listen start")
+            while self.running:
+                try:
+                    conn, addr = self.server.accept()
+                    self.conns.append(conn)
+                except socket.timeout:
+                    continue
+                except OSError:
+                    break
+
+            self.server.close()
+
+        def send_all(self, msg: str):
+            dead_conns = []
+            for conn in self.conns:
+                try:
+                    conn.send(msg.encode(config.ENCODE))
+                except (BrokenPipeError, ConnectionResetError, OSError):
+                    dead_conns.append(conn)
+
+            self.delete_dead_conns(dead_conns)
+
+        def delete_dead_conns(self, dead_conns: list[socket.socket]):
+            for conn in dead_conns:
+                self.conns.remove(conn)
+                try:
+                    conn.close()
+                except OSError:
+                    pass
+
+
     def __init__(self, com_port: str):
-        self.server = APIServer()
+        self.server = self.APIServer()
 
         self.ser = serial.Serial(com_port, 9600)
-        logger.info(f"Connected to {com_port} device")
+        rootlog.info(f"HardwareAPI connected to {com_port} device")
 
         self.running = True
 
@@ -91,17 +91,18 @@ class HardwareAPI:
                 try:
                     data = int(self.ser.readline().decode().strip())
                 except ValueError:
-                    continue  # Некоректні дані
+                    rootlog.warning('Wrong data sent from device!')
+                    continue
 
                 btn1 = bool((data >> 0) & 1)
                 btn2 = bool((data >> 1) & 1)
 
-                # --- Обробка кнопок ---
-                # Обидві натиснуті
+                # --- Keys handling ---
+                # Both pressed
                 if btn1 and btn2 and not self.btn1_last and not self.btn2_last:
                     self.both_pressed = True
 
-                # Перше відпускання
+                # First key-up
                 if self.both_pressed and not self.waiting_for_second_up:
                     if not btn1 and self.btn1_last:
                         self.first_up_button = "btn1"
@@ -118,7 +119,7 @@ class HardwareAPI:
                         self.btn2_last = btn2
                         continue
 
-                # Друге відпускання
+                # Second key-up
                 if self.both_pressed and self.waiting_for_second_up:
                     second_released = (
                         (not btn1 and self.btn1_last and self.first_up_button != "btn1") or
@@ -126,26 +127,26 @@ class HardwareAPI:
                     )
 
                     if second_released:
-                        logger.debug("Both up event")
+                        rootlog.debug("Both up event")
                         threading.Thread(target=self.on_both_up).start()
                         self.data_reset()
                     elif time.time() - self.first_up_time > self.BOTH_RELEASE_TIMEOUT:
-                        # Занадто довго чекали — виконуємо одинарне up
+                        # Both keys up timeout
                         if self.first_up_button == "btn1":
-                            logger.debug("Too long delay. Button 1 up event")
+                            rootlog.debug("Timeout. Both up event did not register, button 1 up event registered instead")
                             threading.Thread(target=self.on_btn1_up).start()
                         else:
-                            logger.debug("Too long delay. Button 2 up event")
+                            rootlog.debug("Timeout. Both up event did not register, button 2 up event registered instead")
                             threading.Thread(target=self.on_btn2_up).start()
                         self.data_reset()
 
-                # Окремі up, якщо не чекали обидві
+                # Single button-up
                 if not self.both_pressed and not btn1 and self.btn1_last:
-                    logger.debug("Button 1 up event")
+                    rootlog.debug("Button 1 up event")
                     threading.Thread(target=self.on_btn1_up).start()
 
                 if not self.both_pressed and not btn2 and self.btn2_last:
-                    logger.debug("Button 2 up event")
+                    rootlog.debug("Button 2 up event")
                     threading.Thread(target=self.on_btn2_up).start()
 
                 # Оновлення станів
@@ -156,7 +157,7 @@ class HardwareAPI:
 
 
     def stop_api(self):
-        logger.info("HAPI starting stop script")
+        rootlog.info("HardwareAPI stopping")
         self.running = False
         self.server.running = False
 

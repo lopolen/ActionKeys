@@ -9,7 +9,7 @@ import keyboard
 
 import config
 from HardwareAPI import HardwareAPI
-from logger import logger
+from logger import rootlog
 
 
 class RootServer:
@@ -24,7 +24,7 @@ class RootServer:
     def server_listen(self):
         self.server.listen()
 
-        logger.info("RootServer listen started")
+        rootlog.info("RootServer listen started")
 
         while self.running:
             try:
@@ -33,33 +33,34 @@ class RootServer:
             except socket.timeout:
                 continue
             except OSError as err:
-                logger.exception(err)
+                rootlog.exception(err)
                 break
 
 
     def client_handler(self, conn):
-        logger.debug("New conn on RootServer")
+        rootlog.debug("New connection to RootServer")
 
         while self.running:
             msg = conn.recv(1024)
             if msg:
                 command = msg.decode(config.ENCODE).strip()
-                if command == 'exit':
-                    logger.debug("Exit command sent")
-                    api_exit()
 
                 try:
                     command = json.loads(command)
+                    if command['command'] == 'exit':
+                        rootlog.info("Exit command received")
+                        api_exit()
+
                     if command['command'] == "imitate_keyboard":
-                        logger.info(f"Imitating {command['args']} press and release")
+                        rootlog.info(f"Imitating {command['args']} press-release")
                         keyboard.press_and_release(command['args'])
 
                     if command['command'] == "cmd":
-                        logger.info(f"cmd: {command['args']}")
+                        rootlog.info(f"cmd: {command['args']}")
                         subprocess.Popen(command['args'])
 
                 except JSONDecodeError:
-                    logger.warning(f"Invalid command sent: {command}")
+                    rootlog.warning(f"Invalid command sent: {command}")
                     continue
 
         conn.close()
@@ -68,7 +69,7 @@ class RootServer:
 def api_exit():
     global ha, rs
 
-    logger.info("Root API exiting")
+    rootlog.info("RootAPI stopping")
 
     ha.stop_api()
     rs.running = False
