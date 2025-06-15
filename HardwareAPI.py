@@ -10,9 +10,6 @@ from logger import rootlog
 
 
 class HardwareAPI:
-    BOTH_RELEASE_TIMEOUT = 0.05  # 50 мс
-
-
     class APIServer:
         def __init__(self):
             self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -67,21 +64,20 @@ class HardwareAPI:
         self.btn1_last = False
         self.btn2_last = False
 
-        self.both_pressed = False
-        self.waiting_for_second_up = False
-        self.first_up_time = 0
-        self.first_up_button = None
+        self.ignore_next_single_up = None
+        self.waiting_for_release = None
+        self.both_pressed = None
+        self.btn1_down_time = 0
+        self.btn2_down_time = 0
+        self.btn1_up_time = 0
+        self.btn2_up_time = 0
 
         self.on_btn1_up = lambda: self.server.send_all("btn1_up")
         self.on_btn2_up = lambda: self.server.send_all("btn2_up")
         self.on_both_up = lambda: self.server.send_all("both_up")
 
-
-    def data_reset(self):
-        self.both_pressed = False
-        self.waiting_for_second_up = False
-        self.first_up_button = None
-
+    PRESS_SYNC_TIMEOUT = 0.1
+    RELEASE_SYNC_TIMEOUT = 0.1
 
     def listen(self):
         threading.Thread(target=self.server.server_listen).start()
@@ -96,64 +92,61 @@ class HardwareAPI:
 
                 btn1 = bool((data >> 0) & 1)
                 btn2 = bool((data >> 1) & 1)
+                now = time.time()
 
-                # --- Keys handling ---
-                # Both pressed
-                if btn1 and btn2 and not self.btn1_last and not self.btn2_last:
+                # Saving time data
+                if btn1 and not self.btn1_last:
+                    self.btn1_down_time = now
+                if btn2 and not self.btn2_last:
+                    self.btn2_down_time = now
+                if not btn1 and self.btn1_last:
+                    self.btn1_up_time = now
+                if not btn2 and self.btn2_last:
+                    self.btn2_up_time = now
+
+                # --- Both down logic ---
+                both_pressed_now = btn1 and btn2
+                both_pressed_sync = abs(self.btn1_down_time - self.btn2_down_time) <= self.PRESS_SYNC_TIMEOUT
+
+                if both_pressed_now and both_pressed_sync and not self.both_pressed:
                     self.both_pressed = True
+                    self.waiting_for_release = True
+                    self.ignore_next_single_up = True
+                    rootlog.debug("Both pressed")
 
-                # First key-up
-                if self.both_pressed and not self.waiting_for_second_up:
-                    if not btn1 and self.btn1_last:
-                        self.first_up_button = "btn1"
-                        self.first_up_time = time.time()
-                        self.waiting_for_second_up = True
-                        self.btn1_last = btn1
-                        self.btn2_last = btn2
-                        continue
-                    elif not btn2 and self.btn2_last:
-                        self.first_up_button = "btn2"
-                        self.first_up_time = time.time()
-                        self.waiting_for_second_up = True
-                        self.btn1_last = btn1
-                        self.btn2_last = btn2
-                        continue
-
-                # Second key-up
-                if self.both_pressed and self.waiting_for_second_up:
-                    second_released = (
-                        (not btn1 and self.btn1_last and self.first_up_button != "btn1") or
-                        (not btn2 and self.btn2_last and self.first_up_button != "btn2")
-                    )
-
-                    if second_released:
-                        rootlog.debug("Both up event")
-                        threading.Thread(target=self.on_both_up).start()
-                        self.data_reset()
-                    elif time.time() - self.first_up_time > self.BOTH_RELEASE_TIMEOUT:
-                        # Both keys up timeout
-                        if self.first_up_button == "btn1":
-                            rootlog.debug("Timeout. Both up event did not register, button 1 up event registered instead")
-                            threading.Thread(target=self.on_btn1_up).start()
+                # --- Up logic ---
+                if self.both_pressed and self.waiting_for_release:
+                    if not btn1 and not btn2:
+                        release_diff = abs(self.btn1_up_time - self.btn2_up_time)
+                        if release_diff <= self.RELEASE_SYNC_TIMEOUT:
+                            rootlog.debug("Both up")
+                            threading.Thread(target=self.on_both_up).start()
                         else:
-                            rootlog.debug("Timeout. Both up event did not register, button 2 up event registered instead")
-                            threading.Thread(target=self.on_btn2_up).start()
-                        self.data_reset()
+                            rootlog.debug(f"Desynced release ({release_diff:.3f}s). Ignore.")
+                        self.reset_state()
+                        self.btn1_last = btn1
+                        self.btn2_last = btn2
+                        continue
 
-                # Single button-up
-                if not self.both_pressed and not btn1 and self.btn1_last:
-                    rootlog.debug("Button 1 up event")
-                    threading.Thread(target=self.on_btn1_up).start()
+                # --- Single buttons ---
+                if not self.both_pressed:
+                    if not btn1 and self.btn1_last and not self.ignore_next_single_up:
+                        rootlog.debug("Button 1 up")
+                        threading.Thread(target=self.on_btn1_up).start()
 
-                if not self.both_pressed and not btn2 and self.btn2_last:
-                    rootlog.debug("Button 2 up event")
-                    threading.Thread(target=self.on_btn2_up).start()
+                    if not btn2 and self.btn2_last and not self.ignore_next_single_up:
+                        rootlog.debug("Button 2 up")
+                        threading.Thread(target=self.on_btn2_up).start()
 
-                # Оновлення станів
                 self.btn1_last = btn1
                 self.btn2_last = btn2
 
-            time.sleep(0.01)
+            time.sleep(0.005)
+
+    def reset_state(self):
+        self.both_pressed = False
+        self.waiting_for_release = False
+        self.ignore_next_single_up = False
 
 
     def stop_api(self):
