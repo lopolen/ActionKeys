@@ -10,6 +10,16 @@ from button_scripts.both_up import both_up
 from button_scripts.btn1_up import btn1_up
 from button_scripts.btn2_up import btn2_up
 
+from PyQt6.QtWidgets import QApplication
+
+
+app = QApplication(sys.argv)
+tray = FrontEnd.SystemTrayIcon()
+aiit_window = FrontEnd.AIItWindow()
+
+FrontEnd.controller.show_window_signal.connect(aiit_window.show)
+FrontEnd.controller.ollama_run_signal.connect(aiit_window.aiit)
+
 
 def hardware_listen():
     global running
@@ -44,11 +54,13 @@ def stop():
     logger.info("Stop function start")
     send_to_root('exit')
     running = False
-    sys.exit()
+    app.quit()
+
+FrontEnd.exit_callback = stop
 
 
 if __name__ == '__main__':
     running = True
 
     threading.Thread(target=hardware_listen).start()
-    FrontEnd.run(lambda: stop())
+    app.exec()
